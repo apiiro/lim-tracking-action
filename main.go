@@ -27,6 +27,8 @@ func main() {
 }
 
 var token = os.Getenv("GITHUB_TOKEN")
+var eventPullRequestTitle = os.Getenv("EVENT_PR_TITLE")
+var eventPullRequestIssuer = os.Getenv("EVENT_PR_ISSUER")
 var eventPullRequestNumber = os.Getenv("EVENT_PR_NUMBER")
 var mergedPullRequestNumber = os.Getenv("MERGED_PR_NUMBER")
 
@@ -53,7 +55,7 @@ func actionMain(_ map[string]string, _ *ezactions.RunResources) (map[string]stri
 	githubClient := github.NewClient(oauthClient)
 
 	for {
-		response, err := createFile(pullRequestNumber, githubClient, ctx)
+		response, err := createFile(eventPullRequestTitle, eventPullRequestIssuer, pullRequestNumber, githubClient, ctx)
 		if response != nil && response.StatusCode == 422 {
 			log.Printf("file already exists for %v: %v, considering as success", pullRequestNumber, err)
 			return map[string]string{}, nil
@@ -75,7 +77,7 @@ func actionMain(_ map[string]string, _ *ezactions.RunResources) (map[string]stri
 	}
 }
 
-func createFile(pullRequestNumber string, githubClient *github.Client, ctx context.Context) (*github.Response, error) {
+func createFile(eventPullRequestTitle string, eventPullRequestIssuer string, pullRequestNumber string, githubClient *github.Client, ctx context.Context) (*github.Response, error) {
 	committer := "github-actions"
 	committerEmail := "github-actions@github.com"
 	message := fmt.Sprintf("Automated marker set in place by closing pull request #%v", pullRequestNumber)
@@ -86,6 +88,7 @@ func createFile(pullRequestNumber string, githubClient *github.Client, ctx conte
 		Email: &committerEmail,
 		Login: &committer,
 	}
+	fileContent := fmt.Sprintf("%v\n%v\n%v", pullRequestNumber, eventPullRequestTitle, eventPullRequestIssuer)
 	_, response, err := githubClient.Repositories.CreateFile(
 		ctx,
 		"apiiro",
@@ -93,7 +96,7 @@ func createFile(pullRequestNumber string, githubClient *github.Client, ctx conte
 		fmt.Sprintf("terminal/%v.marker", pullRequestNumber),
 		&github.RepositoryContentFileOptions{
 			Message:   &message,
-			Content:   []byte(pullRequestNumber),
+			Content:   []byte(fileContent),
 			Author:    author,
 			Committer: author,
 		},
