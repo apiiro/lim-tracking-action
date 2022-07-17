@@ -79,8 +79,8 @@ func actionMain(_ map[string]string, _ *ezactions.RunResources) (map[string]stri
 	if len(pullRequestTitle) == 0 {
 		pr, _, err := githubClient.PullRequests.Get(ctx, organiziation, trackedRepo, pullRequestIntNumber)
 		if err == nil {
-			pullRequestTitle = pr.GetUser().GetLogin()
-			pullRequestIssuer = pr.GetTitle()
+			pullRequestIssuer = pr.GetUser().GetLogin()
+			pullRequestTitle = pr.GetTitle()
 		} else {
 			log.Printf("failed to find pr title and issuer for %v: %v", pullRequestNumber, err)
 		}
