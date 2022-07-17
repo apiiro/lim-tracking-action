@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"golang.org/x/oauth2"
 	"log"
 	"os"
+	"strconv"
 	"time"
+
+	"golang.org/x/oauth2"
 
 	"github.com/google/go-github/v38/github"
 	"github.com/willabides/ezactions"
@@ -26,11 +28,23 @@ func main() {
 	action.Main()
 }
 
+func getEnvOrDefault(key string, def string) string {
+	envValue := os.Getenv(key)
+	if len(envValue) > 0 {
+		return envValue
+	}
+	return def
+}
+
 var token = os.Getenv("GITHUB_TOKEN")
 var eventPullRequestTitle = os.Getenv("EVENT_PR_TITLE")
 var eventPullRequestIssuer = os.Getenv("EVENT_PR_ISSUER")
 var eventPullRequestNumber = os.Getenv("EVENT_PR_NUMBER")
 var mergedPullRequestNumber = os.Getenv("MERGED_PR_NUMBER")
+
+var organiziation = getEnvOrDefault("ORGANIZATION", "apiiro")
+var trackedRepo = getEnvOrDefault("TRACKED_REPO", "lim")
+var trackingRepo = getEnvOrDefault("TRACKING_REPO", "lim-tracking")
 
 func actionMain(_ map[string]string, _ *ezactions.RunResources) (map[string]string, error) {
 
@@ -45,6 +59,11 @@ func actionMain(_ map[string]string, _ *ezactions.RunResources) (map[string]stri
 		return nil, fmt.Errorf("a valid token was not provided")
 	}
 
+	pullRequestIntNumber, err := strconv.Atoi(pullRequestNumber)
+	if err != nil {
+		return nil, fmt.Errorf("a valid pull request number was not provided (%v)", pullRequestNumber)
+	}
+
 	log.Printf("working with pull request number %v", pullRequestNumber)
 
 	tokenSource := oauth2.StaticTokenSource(
@@ -54,27 +73,38 @@ func actionMain(_ map[string]string, _ *ezactions.RunResources) (map[string]stri
 	oauthClient := oauth2.NewClient(ctx, tokenSource)
 	githubClient := github.NewClient(oauthClient)
 
-	for {
-		response, err := createFile(eventPullRequestTitle, eventPullRequestIssuer, pullRequestNumber, githubClient, ctx)
-		if response != nil && response.StatusCode == 422 {
-			log.Printf("file already exists for %v: %v, considering as success", pullRequestNumber, err)
-			return map[string]string{}, nil
+	pullRequestTitle := eventPullRequestTitle
+	pullRequestIssuer := eventPullRequestIssuer
+
+	if len(pullRequestTitle) == 0 {
+		pr, _, err := githubClient.PullRequests.Get(ctx, organiziation, trackedRepo, pullRequestIntNumber)
+		if err == nil {
+			pullRequestTitle = pr.GetUser().GetLogin()
+			pullRequestIssuer = pr.GetTitle()
+		} else {
+			log.Printf("failed to find pr title and issuer for %v: %v", pullRequestNumber, err)
 		}
-		if err != nil {
-			if _, ok := err.(*github.RateLimitError); ok {
-				waitDuration := time.Now().Sub(response.Rate.Reset.Time)
-				log.Printf("hit rate limit, will need to wait %v sec and retry", waitDuration.Seconds())
-				time.Sleep(waitDuration)
-			} else {
-				return nil, fmt.Errorf("failed to create file for %v: %v", pullRequestNumber, err)
-			}
-		}
-		if response.StatusCode == 201 {
-			log.Printf("completed successfully!")
-			return map[string]string{}, nil
-		}
-		return nil, fmt.Errorf("unexpected non-error status for %v: %v", pullRequestNumber, response.StatusCode)
 	}
+
+	response, err := createFile(pullRequestTitle, pullRequestIssuer, pullRequestNumber, githubClient, ctx)
+	if response != nil && response.StatusCode == 422 {
+		log.Printf("file already exists for %v: %v, considering as success", pullRequestNumber, err)
+		return map[string]string{}, nil
+	}
+	if err != nil {
+		if _, ok := err.(*github.RateLimitError); ok {
+			waitDuration := time.Since(response.Rate.Reset.Time)
+			log.Printf("hit rate limit, will need to wait %v sec and retry", waitDuration.Seconds())
+			time.Sleep(waitDuration)
+		} else {
+			return nil, fmt.Errorf("failed to create file for %v: %v", pullRequestNumber, err)
+		}
+	}
+	if response.StatusCode == 201 {
+		log.Printf("completed successfully!")
+		return map[string]string{}, nil
+	}
+	return nil, fmt.Errorf("unexpected non-error status for %v: %v", pullRequestNumber, response.StatusCode)
 }
 
 func createFile(eventPullRequestTitle string, eventPullRequestIssuer string, pullRequestNumber string, githubClient *github.Client, ctx context.Context) (*github.Response, error) {
@@ -91,8 +121,8 @@ func createFile(eventPullRequestTitle string, eventPullRequestIssuer string, pul
 	fileContent := fmt.Sprintf("%v\n%v\n%v", pullRequestNumber, eventPullRequestTitle, eventPullRequestIssuer)
 	_, response, err := githubClient.Repositories.CreateFile(
 		ctx,
-		"apiiro",
-		"lim-tracking",
+		organiziation,
+		trackingRepo,
 		fmt.Sprintf("terminal/%v.marker", pullRequestNumber),
 		&github.RepositoryContentFileOptions{
 			Message:   &message,
