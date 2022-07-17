@@ -28,11 +28,23 @@ func main() {
 	action.Main()
 }
 
+func getEnvOrDefault(key string, def string) string {
+	envValue := os.Getenv(key)
+	if len(envValue) > 0 {
+		return envValue
+	}
+	return def
+}
+
 var token = os.Getenv("GITHUB_TOKEN")
 var eventPullRequestTitle = os.Getenv("EVENT_PR_TITLE")
 var eventPullRequestIssuer = os.Getenv("EVENT_PR_ISSUER")
 var eventPullRequestNumber = os.Getenv("EVENT_PR_NUMBER")
 var mergedPullRequestNumber = os.Getenv("MERGED_PR_NUMBER")
+
+var organiziation = getEnvOrDefault("ORGANIZATION", "apiiro")
+var trackedRepo = getEnvOrDefault("TRACKED_REPO", "lim")
+var trackingRepo = getEnvOrDefault("TRACKING_REPO", "lim-tracking")
 
 func actionMain(_ map[string]string, _ *ezactions.RunResources) (map[string]string, error) {
 
@@ -65,7 +77,7 @@ func actionMain(_ map[string]string, _ *ezactions.RunResources) (map[string]stri
 	pullRequestIssuer := eventPullRequestIssuer
 
 	if len(pullRequestTitle) == 0 {
-		pr, _, err := githubClient.PullRequests.Get(ctx, "apiiro", "lim", pullRequestIntNumber)
+		pr, _, err := githubClient.PullRequests.Get(ctx, organiziation, trackedRepo, pullRequestIntNumber)
 		if err == nil {
 			pullRequestTitle = pr.GetUser().GetLogin()
 			pullRequestIssuer = pr.GetTitle()
@@ -109,8 +121,8 @@ func createFile(eventPullRequestTitle string, eventPullRequestIssuer string, pul
 	fileContent := fmt.Sprintf("%v\n%v\n%v", pullRequestNumber, eventPullRequestTitle, eventPullRequestIssuer)
 	_, response, err := githubClient.Repositories.CreateFile(
 		ctx,
-		"apiiro",
-		"lim-tracking",
+		organiziation,
+		trackingRepo,
 		fmt.Sprintf("terminal/%v.marker", pullRequestNumber),
 		&github.RepositoryContentFileOptions{
 			Message:   &message,
