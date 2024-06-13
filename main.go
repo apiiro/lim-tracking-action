@@ -3,14 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/google/go-github/v38/github"
-	"github.com/willabides/ezactions"
-	"golang.org/x/oauth2"
 	"log"
 	"os"
-	"regexp"
 	"strconv"
 	"time"
+
+	"golang.org/x/oauth2"
+
+	"github.com/google/go-github/v38/github"
+	"github.com/willabides/ezactions"
 )
 
 //go:generate go run . -generate
@@ -39,7 +40,6 @@ var token = os.Getenv("GITHUB_TOKEN")
 var eventPullRequestTitle = os.Getenv("EVENT_PR_TITLE")
 var eventPullRequestIssuer = os.Getenv("EVENT_PR_ISSUER")
 var eventPullRequestNumber = os.Getenv("EVENT_PR_NUMBER")
-var eventPullRequestBody = os.Getenv("EVENT_PR_BODY")
 var mergedPullRequestNumber = os.Getenv("MERGED_PR_NUMBER")
 
 var organiziation = getEnvOrDefault("ORGANIZATION", "apiiro")
@@ -75,7 +75,6 @@ func actionMain(_ map[string]string, _ *ezactions.RunResources) (map[string]stri
 
 	pullRequestTitle := eventPullRequestTitle
 	pullRequestIssuer := eventPullRequestIssuer
-	pullRequestBody := pullRequestBodySanitizer(eventPullRequestBody)
 
 	if len(pullRequestTitle) == 0 {
 		pr, _, err := githubClient.PullRequests.Get(ctx, organiziation, trackedRepo, pullRequestIntNumber)
@@ -87,7 +86,7 @@ func actionMain(_ map[string]string, _ *ezactions.RunResources) (map[string]stri
 		}
 	}
 
-	response, err := createFile(pullRequestTitle, pullRequestIssuer, pullRequestNumber, pullRequestBody, githubClient, ctx)
+	response, err := createFile(pullRequestTitle, pullRequestIssuer, pullRequestNumber, githubClient, ctx)
 	if response != nil && response.StatusCode == 422 {
 		log.Printf("file already exists for %v: %v, considering as success", pullRequestNumber, err)
 		return map[string]string{}, nil
@@ -108,7 +107,7 @@ func actionMain(_ map[string]string, _ *ezactions.RunResources) (map[string]stri
 	return nil, fmt.Errorf("unexpected non-error status for %v: %v", pullRequestNumber, response.StatusCode)
 }
 
-func createFile(eventPullRequestTitle string, eventPullRequestIssuer string, pullRequestNumber string, pullRequestBody string, githubClient *github.Client, ctx context.Context) (*github.Response, error) {
+func createFile(eventPullRequestTitle string, eventPullRequestIssuer string, pullRequestNumber string, githubClient *github.Client, ctx context.Context) (*github.Response, error) {
 	committer := "github-actions"
 	committerEmail := "github-actions@github.com"
 	message := fmt.Sprintf("Automated marker set in place by closing pull request #%v", pullRequestNumber)
@@ -119,7 +118,7 @@ func createFile(eventPullRequestTitle string, eventPullRequestIssuer string, pul
 		Email: &committerEmail,
 		Login: &committer,
 	}
-	fileContent := fmt.Sprintf("%v\n%v\n%v\n%v", pullRequestNumber, eventPullRequestTitle, eventPullRequestIssuer, pullRequestBody)
+	fileContent := fmt.Sprintf("%v\n%v\n%v", pullRequestNumber, eventPullRequestTitle, eventPullRequestIssuer)
 	_, response, err := githubClient.Repositories.CreateFile(
 		ctx,
 		organiziation,
@@ -133,20 +132,4 @@ func createFile(eventPullRequestTitle string, eventPullRequestIssuer string, pul
 		},
 	)
 	return response, err
-}
-
-func pullRequestBodySanitizer(pullRequestBody string) string {
-	if len(pullRequestBody) == 0 {
-		return ""
-	}
-
-	regexPattern := regexp.MustCompile(`(?i)closes:?\s*(LIM-\d+)`)
-	matches := regexPattern.FindAllStringSubmatch(pullRequestBody, -1)
-
-	var jiraTickets string
-	for _, match := range matches {
-		jiraTickets += match[1] + " "
-	}
-
-	return jiraTickets
 }
