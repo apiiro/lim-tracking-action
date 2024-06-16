@@ -140,7 +140,7 @@ func pullRequestBodySanitizer(pullRequestBody string) string {
 		return ""
 	}
 
-	regexPattern := regexp.MustCompile(`(?i)closes:?\s*(LIM-\d+)`)
+	regexPattern := regexp.MustCompile(`(?i)\b(?:close|closes):?\b.*?\b(LIM-\d+)\b`)
 	matches := regexPattern.FindAllStringSubmatch(pullRequestBody, -1)
 
 	var tickets string
