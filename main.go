@@ -75,7 +75,7 @@ func actionMain(_ map[string]string, _ *ezactions.RunResources) (map[string]stri
 
 	pullRequestTitle := eventPullRequestTitle
 	pullRequestIssuer := eventPullRequestIssuer
-	pullRequestBody := pullRequestBodySanitizer(eventPullRequestBody)
+	pullRequestBody := jiraTicketsExtraction(eventPullRequestBody)
 
 	if len(pullRequestTitle) == 0 {
 		pr, _, err := githubClient.PullRequests.Get(ctx, organiziation, trackedRepo, pullRequestIntNumber)
@@ -135,18 +135,17 @@ func createFile(eventPullRequestTitle string, eventPullRequestIssuer string, pul
 	return response, err
 }
 
-func pullRequestBodySanitizer(pullRequestBody string) string {
+func jiraTicketsExtraction(pullRequestBody string) string {
 	if len(pullRequestBody) == 0 {
 		return ""
 	}
 
-	regexPattern := regexp.MustCompile(`(?i)\b(?:close|closes):?\b.*?\b(LIM-\d+)\b`)
+	regexPattern := regexp.MustCompile(`(?i)(\b[\\n](?:close|closes):?\b|\b(?:close|closes):?\b).*?\b(LIM-\d+)\b`)
 	matches := regexPattern.FindAllStringSubmatch(pullRequestBody, -1)
 
 	var tickets string
 	for _, match := range matches {
-		tickets += match[1] + " "
+		tickets += match[2] + " "
 	}
-
 	return tickets
 }
