@@ -75,19 +75,21 @@ func actionMain(_ map[string]string, _ *ezactions.RunResources) (map[string]stri
 
 	pullRequestTitle := eventPullRequestTitle
 	pullRequestIssuer := eventPullRequestIssuer
-	pullRequestBody := jiraTicketsExtraction(eventPullRequestBody)
+	jiraTickets := jiraTicketsExtraction(eventPullRequestBody)
 
 	if len(pullRequestTitle) == 0 {
 		pr, _, err := githubClient.PullRequests.Get(ctx, organiziation, trackedRepo, pullRequestIntNumber)
 		if err == nil {
 			pullRequestIssuer = pr.GetUser().GetLogin()
 			pullRequestTitle = pr.GetTitle()
+			pullRequestBody := pr.GetBody()
+			jiraTickets = jiraTicketsExtraction(pullRequestBody)
 		} else {
 			log.Printf("failed to find pr title and issuer for %v: %v", pullRequestNumber, err)
 		}
 	}
 
-	response, err := createFile(pullRequestTitle, pullRequestIssuer, pullRequestNumber, pullRequestBody, githubClient, ctx)
+	response, err := createFile(pullRequestTitle, pullRequestIssuer, pullRequestNumber, jiraTickets, githubClient, ctx)
 	if response != nil && response.StatusCode == 422 {
 		log.Printf("file already exists for %v: %v, considering as success", pullRequestNumber, err)
 		return map[string]string{}, nil
