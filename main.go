@@ -137,13 +137,13 @@ func createFile(eventPullRequestTitle string, eventPullRequestIssuer string, pul
 	return response, err
 }
 
-func jiraTicketsExtraction(jiraTickets string) string {
-	if len(jiraTickets) == 0 {
+func jiraTicketsExtraction(pullRequestBody string) string {
+	if len(pullRequestBody) == 0 {
 		return ""
 	}
 
 	regexPattern := regexp.MustCompile(`(?i)(\b[\\n](?:close|closes):?\b|\b(?:close|closes):?\b).*?\b(LIM-\d+)\b`)
-	matches := regexPattern.FindAllStringSubmatch(jiraTickets, -1)
+	matches := regexPattern.FindAllStringSubmatch(pullRequestBody, -1)
 
 	var tickets string
 	for _, match := range matches {
