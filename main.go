@@ -110,7 +110,7 @@ func actionMain(_ map[string]string, _ *ezactions.RunResources) (map[string]stri
 	return nil, fmt.Errorf("unexpected non-error status for %v: %v", pullRequestNumber, response.StatusCode)
 }
 
-func createFile(eventPullRequestTitle string, eventPullRequestIssuer string, pullRequestNumber string, pullRequestBody string, githubClient *github.Client, ctx context.Context) (*github.Response, error) {
+func createFile(eventPullRequestTitle string, eventPullRequestIssuer string, pullRequestNumber string, jiraTickets string, githubClient *github.Client, ctx context.Context) (*github.Response, error) {
 	committer := "github-actions"
 	committerEmail := "github-actions@github.com"
 	message := fmt.Sprintf("Automated marker set in place by closing pull request #%v", pullRequestNumber)
@@ -121,7 +121,7 @@ func createFile(eventPullRequestTitle string, eventPullRequestIssuer string, pul
 		Email: &committerEmail,
 		Login: &committer,
 	}
-	fileContent := fmt.Sprintf("%v\n%v\n%v\n%v", pullRequestNumber, eventPullRequestTitle, eventPullRequestIssuer, pullRequestBody)
+	fileContent := fmt.Sprintf("%v\n%v\n%v\n%v", pullRequestNumber, eventPullRequestTitle, eventPullRequestIssuer, jiraTickets)
 	_, response, err := githubClient.Repositories.CreateFile(
 		ctx,
 		organiziation,
@@ -137,13 +137,13 @@ func createFile(eventPullRequestTitle string, eventPullRequestIssuer string, pul
 	return response, err
 }
 
-func jiraTicketsExtraction(pullRequestBody string) string {
-	if len(pullRequestBody) == 0 {
+func jiraTicketsExtraction(jiraTickets string) string {
+	if len(jiraTickets) == 0 {
 		return ""
 	}
 
 	regexPattern := regexp.MustCompile(`(?i)(\b[\\n](?:close|closes):?\b|\b(?:close|closes):?\b).*?\b(LIM-\d+)\b`)
-	matches := regexPattern.FindAllStringSubmatch(pullRequestBody, -1)
+	matches := regexPattern.FindAllStringSubmatch(jiraTickets, -1)
 
 	var tickets string
 	for _, match := range matches {
