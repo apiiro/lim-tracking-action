@@ -75,19 +75,21 @@ func actionMain(_ map[string]string, _ *ezactions.RunResources) (map[string]stri
 
 	pullRequestTitle := eventPullRequestTitle
 	pullRequestIssuer := eventPullRequestIssuer
-	pullRequestBody := jiraTicketsExtraction(eventPullRequestBody)
+	jiraTickets := jiraTicketsExtraction(eventPullRequestBody)
 
 	if len(pullRequestTitle) == 0 {
 		pr, _, err := githubClient.PullRequests.Get(ctx, organiziation, trackedRepo, pullRequestIntNumber)
 		if err == nil {
 			pullRequestIssuer = pr.GetUser().GetLogin()
 			pullRequestTitle = pr.GetTitle()
+			pullRequestBody := pr.GetBody()
+			jiraTickets = jiraTicketsExtraction(pullRequestBody)
 		} else {
 			log.Printf("failed to find pr title and issuer for %v: %v", pullRequestNumber, err)
 		}
 	}
 
-	response, err := createFile(pullRequestTitle, pullRequestIssuer, pullRequestNumber, pullRequestBody, githubClient, ctx)
+	response, err := createFile(pullRequestTitle, pullRequestIssuer, pullRequestNumber, jiraTickets, githubClient, ctx)
 	if response != nil && response.StatusCode == 422 {
 		log.Printf("file already exists for %v: %v, considering as success", pullRequestNumber, err)
 		return map[string]string{}, nil
@@ -108,7 +110,7 @@ func actionMain(_ map[string]string, _ *ezactions.RunResources) (map[string]stri
 	return nil, fmt.Errorf("unexpected non-error status for %v: %v", pullRequestNumber, response.StatusCode)
 }
 
-func createFile(eventPullRequestTitle string, eventPullRequestIssuer string, pullRequestNumber string, pullRequestBody string, githubClient *github.Client, ctx context.Context) (*github.Response, error) {
+func createFile(eventPullRequestTitle string, eventPullRequestIssuer string, pullRequestNumber string, jiraTickets string, githubClient *github.Client, ctx context.Context) (*github.Response, error) {
 	committer := "github-actions"
 	committerEmail := "github-actions@github.com"
 	message := fmt.Sprintf("Automated marker set in place by closing pull request #%v", pullRequestNumber)
@@ -119,7 +121,7 @@ func createFile(eventPullRequestTitle string, eventPullRequestIssuer string, pul
 		Email: &committerEmail,
 		Login: &committer,
 	}
-	fileContent := fmt.Sprintf("%v\n%v\n%v\n%v", pullRequestNumber, eventPullRequestTitle, eventPullRequestIssuer, pullRequestBody)
+	fileContent := fmt.Sprintf("%v\n%v\n%v\n%v", pullRequestNumber, eventPullRequestTitle, eventPullRequestIssuer, jiraTickets)
 	_, response, err := githubClient.Repositories.CreateFile(
 		ctx,
 		organiziation,
